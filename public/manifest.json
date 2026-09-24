@@ -1,0 +1,16 @@
+{
+  "short_name": "Attendance Intel",
+  "name": "Attendance Intelligence — Academic Attendance OS",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b0f17",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait"
+}
