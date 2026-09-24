@@ -3,8 +3,8 @@
   "name": "Attendance Intelligence — Academic Attendance OS",
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "192x192 512x512",
+      "src": "/favicon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     }
   ],
