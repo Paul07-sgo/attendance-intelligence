@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Subject, TimetableEntry, AcademicEvent, ClassOccurrence, AppSettings } from '../types';
+import type { ClassOccurrence } from '../types';
 import {
   generateOccurrenceId,
   reconcileOccurrences,
