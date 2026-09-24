@@ -5,6 +5,7 @@ import {
   INITIAL_ACADEMIC_EVENTS,
   INITIAL_SETTINGS,
 } from '../data/initialData';
+import { isOccurrenceAfterBaselineCutoff } from './occurrenceEngine';
 
 const KEYS = {
   SUBJECTS: 'attendance_system_subjects_v1',
@@ -96,12 +97,32 @@ export function saveSettings(settings: AppSettings): void {
   }
 }
 
-export function loadOccurrences(): Record<string, ClassOccurrence> {
+export function loadOccurrences(settings?: AppSettings): Record<string, ClassOccurrence> {
   try {
     const raw = localStorage.getItem(KEYS.OCCURRENCES);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') return parsed;
+    if (parsed && typeof parsed === 'object') {
+      const cutoff = settings || loadSettings();
+      const cleaned: Record<string, ClassOccurrence> = {};
+      let hasBaselineOverlap = false;
+
+      for (const [id, occ] of Object.entries(parsed as Record<string, ClassOccurrence>)) {
+        if (occ && occ.date && occ.startTime) {
+          if (isOccurrenceAfterBaselineCutoff(occ.date, occ.startTime, cutoff)) {
+            cleaned[id] = occ;
+          } else {
+            hasBaselineOverlap = true;
+          }
+        }
+      }
+
+      if (hasBaselineOverlap) {
+        saveOccurrences(cleaned);
+      }
+
+      return cleaned;
+    }
   } catch (e) {
     console.error('Failed to load occurrences from localStorage', e);
   }

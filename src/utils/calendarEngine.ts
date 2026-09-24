@@ -5,8 +5,11 @@ import type {
   Subject,
   SkipDayEvaluation,
   SkipDaySubjectImpact,
+  AppSettings,
+  BaselineSnapshot,
 } from '../types';
 import { calculateAttendancePercentage, getAttendanceStatus, calculateClassesCanMiss } from './attendanceEngine';
+import { isOccurrenceAfterBaselineCutoff } from './occurrenceEngine';
 
 export const DAY_NAMES: DayOfWeek[] = [
   'Sunday',
@@ -97,14 +100,15 @@ export interface UpcomingClassOccurrence {
 
 /**
  * Returns all scheduled future classes for a subject between startDate (inclusive) and endDate (inclusive).
- * Explicitly respects academic blackout dates and weekends.
+ * Explicitly respects academic blackout dates, weekends, and baseline cutoff.
  */
 export function getUpcomingClassesForSubject(
   subjectCode: string,
   startDateStr: string,
   endDateStr: string,
   timetable: TimetableEntry[],
-  events: AcademicEvent[]
+  events: AcademicEvent[],
+  cutoffInput?: BaselineSnapshot | AppSettings | string | null
 ): UpcomingClassOccurrence[] {
   const occurrences: UpcomingClassOccurrence[] = [];
   let current = parseISODate(startDateStr);
@@ -118,6 +122,9 @@ export function getUpcomingClassesForSubject(
         (t) => t.day === dayName && t.subjectCode === subjectCode
       );
       for (const entry of dayClasses) {
+        if (cutoffInput && !isOccurrenceAfterBaselineCutoff(curStr, entry.startTime, cutoffInput)) {
+          continue;
+        }
         occurrences.push({
           date: curStr,
           dayOfWeek: dayName,
@@ -139,9 +146,10 @@ export function countFutureClassesForSubject(
   startDateStr: string,
   endDateStr: string,
   timetable: TimetableEntry[],
-  events: AcademicEvent[]
+  events: AcademicEvent[],
+  cutoffInput?: BaselineSnapshot | AppSettings | string | null
 ): number {
-  return getUpcomingClassesForSubject(subjectCode, startDateStr, endDateStr, timetable, events).length;
+  return getUpcomingClassesForSubject(subjectCode, startDateStr, endDateStr, timetable, events, cutoffInput).length;
 }
 
 /**

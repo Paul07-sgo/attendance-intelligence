@@ -49,7 +49,7 @@ export function App() {
   const [timetable, setTimetable] = useState<TimetableEntry[]>(() => loadTimetable());
   const [events, setEvents] = useState<AcademicEvent[]>(() => loadAcademicEvents());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
-  const [occurrences, setOccurrences] = useState<Record<string, ClassOccurrence>>(() => loadOccurrences());
+  const [occurrences, setOccurrences] = useState<Record<string, ClassOccurrence>>(() => loadOccurrences(loadSettings()));
 
   // Real-time dynamic clock
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -122,18 +122,18 @@ export function App() {
   // Reconcile class occurrences up to current date/time
   const allOccurrences = useMemo(() => {
     return reconcileOccurrences(
-      settings.baselineDate,
+      settings,
       timetable,
       events,
       occurrences,
       currentTime
     );
-  }, [settings.baselineDate, timetable, events, occurrences, currentTime]);
+  }, [settings, timetable, events, occurrences, currentTime]);
 
   // Compute effective subjects by applying resolved outcomes onto baseline
   const effectiveSubjects = useMemo(() => {
-    return getEffectiveSubjects(subjects, occurrences);
-  }, [subjects, occurrences]);
+    return getEffectiveSubjects(subjects, occurrences, settings);
+  }, [subjects, occurrences, settings]);
 
   // Compute stats for all effective subjects
   const subjectStats: SubjectCalculation[] = useMemo(() => {
@@ -143,11 +143,12 @@ export function App() {
         settings.baselineDate,
         settings.termEndDate,
         timetable,
-        events
+        events,
+        settings
       );
       return calculateSubjectStats(subj, settings.defaultTarget, futureClasses);
     });
-  }, [effectiveSubjects, settings.defaultTarget, settings.baselineDate, settings.termEndDate, timetable, events]);
+  }, [effectiveSubjects, settings, timetable, events]);
 
   // Find all pending attendance occurrences
   const pendingOccurrences = useMemo(() => {

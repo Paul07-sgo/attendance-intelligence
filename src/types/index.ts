@@ -93,9 +93,17 @@ export interface SkipDayEvaluation {
   };
 }
 
+export interface BaselineSnapshot {
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm format, e.g. "23:59"
+  timezone?: string;
+}
+
 export interface AppSettings {
   defaultTarget: number; // e.g. 87
   baselineDate: string;  // e.g. '2026-09-24'
+  baselineCutoffTime?: string; // HH:mm format, e.g. '23:59'
+  baselineSnapshot?: BaselineSnapshot;
   termEndDate: string;   // e.g. '2026-12-11'
   theme: 'light' | 'dark';
 }
