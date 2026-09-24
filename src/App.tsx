@@ -12,10 +12,20 @@ import { TimetableManager } from './components/TimetableManager';
 import { AcademicCalendarView } from './components/AcademicCalendarView';
 import { SettingsView } from './components/SettingsView';
 import { CommandPalette } from './components/CommandPalette';
+import { AttendanceConfirmationModal } from './components/AttendanceConfirmationModal';
 
-import type { Subject, TimetableEntry, AcademicEvent, AppSettings, SubjectCalculation } from './types';
+import type {
+  Subject,
+  TimetableEntry,
+  AcademicEvent,
+  AppSettings,
+  SubjectCalculation,
+  ClassOccurrence,
+  ResolvedOutcome,
+} from './types';
 import { calculateSubjectStats } from './utils/attendanceEngine';
-import { countFutureClassesForSubject } from './utils/calendarEngine';
+import { countFutureClassesForSubject, formatISODate } from './utils/calendarEngine';
+import { reconcileOccurrences, getEffectiveSubjects } from './utils/occurrenceEngine';
 import {
   loadSubjects,
   saveSubjects,
@@ -25,6 +35,8 @@ import {
   saveAcademicEvents,
   loadSettings,
   saveSettings,
+  loadOccurrences,
+  saveOccurrences,
   resetToInitialData,
   exportAllData,
 } from './utils/storage';
@@ -37,6 +49,13 @@ export function App() {
   const [timetable, setTimetable] = useState<TimetableEntry[]>(() => loadTimetable());
   const [events, setEvents] = useState<AcademicEvent[]>(() => loadAcademicEvents());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [occurrences, setOccurrences] = useState<Record<string, ClassOccurrence>>(() => loadOccurrences());
+
+  // Real-time dynamic clock
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
+  // Session-dismissed pending occurrence IDs (when clicking "Later")
+  const [dismissedPendingIds, setDismissedPendingIds] = useState<Set<string>>(new Set());
 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
 
@@ -45,6 +64,14 @@ export function App() {
   const [editingSubjectCode, setEditingSubjectCode] = useState<string | null>(null);
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+
+  // Interval timer for real-world dynamic time updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Sync settings to localStorage and HTML root element
   useEffect(() => {
@@ -76,6 +103,11 @@ export function App() {
     saveAcademicEvents(events);
   }, [events]);
 
+  // Sync occurrences to localStorage
+  useEffect(() => {
+    saveOccurrences(occurrences);
+  }, [occurrences]);
+
   const toggleTheme = () => {
     setSettings((prev) => ({
       ...prev,
@@ -87,9 +119,25 @@ export function App() {
     setSettings((prev) => ({ ...prev, defaultTarget: newTarget }));
   };
 
-  // Compute stats for all subjects
+  // Reconcile class occurrences up to current date/time
+  const allOccurrences = useMemo(() => {
+    return reconcileOccurrences(
+      settings.baselineDate,
+      timetable,
+      events,
+      occurrences,
+      currentTime
+    );
+  }, [settings.baselineDate, timetable, events, occurrences, currentTime]);
+
+  // Compute effective subjects by applying resolved outcomes onto baseline
+  const effectiveSubjects = useMemo(() => {
+    return getEffectiveSubjects(subjects, occurrences);
+  }, [subjects, occurrences]);
+
+  // Compute stats for all effective subjects
   const subjectStats: SubjectCalculation[] = useMemo(() => {
-    return subjects.map((subj) => {
+    return effectiveSubjects.map((subj) => {
       const futureClasses = countFutureClassesForSubject(
         subj.code,
         settings.baselineDate,
@@ -99,7 +147,55 @@ export function App() {
       );
       return calculateSubjectStats(subj, settings.defaultTarget, futureClasses);
     });
-  }, [subjects, settings.defaultTarget, settings.baselineDate, settings.termEndDate, timetable, events]);
+  }, [effectiveSubjects, settings.defaultTarget, settings.baselineDate, settings.termEndDate, timetable, events]);
+
+  // Find all pending attendance occurrences
+  const pendingOccurrences = useMemo(() => {
+    return allOccurrences.filter((occ) => occ.status === 'ATTENDANCE_PENDING');
+  }, [allOccurrences]);
+
+  // Find active pending occurrence that hasn't been dismissed with "Later" in this session
+  const activePendingOccurrence = useMemo(() => {
+    return pendingOccurrences.find((occ) => !dismissedPendingIds.has(occ.id)) || null;
+  }, [pendingOccurrences, dismissedPendingIds]);
+
+  // Handlers for occurrence confirmation
+  const handleResolveOccurrence = (occurrenceId: string, outcome: ResolvedOutcome) => {
+    setOccurrences((prev) => ({
+      ...prev,
+      [occurrenceId]: {
+        ...(allOccurrences.find((o) => o.id === occurrenceId) || {
+          id: occurrenceId,
+          subjectCode: occurrenceId.split('-')[0],
+          date: formatISODate(currentTime),
+          startTime: '00:00',
+          endTime: '00:00',
+          type: 'Lecture',
+          status: outcome,
+        }),
+        status: outcome,
+        resolvedAt: new Date().toISOString(),
+      },
+    }));
+
+    setDismissedPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(occurrenceId);
+      return next;
+    });
+  };
+
+  const handleLaterOccurrence = (occurrenceId: string) => {
+    setDismissedPendingIds((prev) => {
+      const next = new Set(prev);
+      next.add(occurrenceId);
+      return next;
+    });
+  };
+
+  const handleOpenPendingConfirmation = () => {
+    setDismissedPendingIds(new Set());
+  };
 
   // Selected subject calculation for detail modal
   const selectedCalc = useMemo(() => {
@@ -148,6 +244,8 @@ export function App() {
     setTimetable(loadTimetable());
     setEvents(loadAcademicEvents());
     setSettings(loadSettings());
+    setOccurrences(loadOccurrences());
+    setDismissedPendingIds(new Set());
   };
 
   // Refresh handler after JSON import
@@ -156,6 +254,8 @@ export function App() {
     setTimetable(loadTimetable());
     setEvents(loadAcademicEvents());
     setSettings(loadSettings());
+    setOccurrences(loadOccurrences());
+    setDismissedPendingIds(new Set());
   };
 
   // Export JSON backup handler
@@ -175,6 +275,8 @@ export function App() {
       console.error('Export failed', e);
     }
   };
+
+  const currentDateStr = formatISODate(currentTime);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
@@ -207,6 +309,9 @@ export function App() {
               timetable={timetable}
               events={events}
               onOpenSkipSimulator={() => setActiveTab('skip-day')}
+              currentDateStr={currentDateStr}
+              pendingOccurrencesCount={pendingOccurrences.length}
+              onOpenPendingConfirmation={handleOpenPendingConfirmation}
             />
 
             {/* Quick Shortcuts */}
@@ -327,7 +432,7 @@ export function App() {
         {/* SKIP DAY TAB */}
         {activeTab === 'skip-day' && (
           <SkipDayCalculator
-            subjects={subjects}
+            subjects={effectiveSubjects}
             timetable={timetable}
             events={events}
             globalTarget={settings.defaultTarget}
@@ -339,7 +444,7 @@ export function App() {
         {activeTab === 'timetable' && (
           <TimetableManager
             timetable={timetable}
-            subjects={subjects}
+            subjects={effectiveSubjects}
             onSaveTimetableEntry={handleSaveTimetableEntry}
             onDeleteTimetableEntry={handleDeleteTimetableEntry}
           />
@@ -376,6 +481,16 @@ export function App() {
           </div>
         </div>
       </footer>
+
+      {/* Confirmation Modal Popup for Pending Class Occurrences */}
+      {activePendingOccurrence && (
+        <AttendanceConfirmationModal
+          occurrence={activePendingOccurrence}
+          subject={subjects.find((s) => s.code === activePendingOccurrence.subjectCode)}
+          onResolve={handleResolveOccurrence}
+          onLater={handleLaterOccurrence}
+        />
+      )}
 
       {/* Modals */}
       <CommandPalette
@@ -424,3 +539,4 @@ export function App() {
 }
 
 export default App;
+

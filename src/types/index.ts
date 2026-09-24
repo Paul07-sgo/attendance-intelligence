@@ -100,3 +100,27 @@ export interface AppSettings {
   theme: 'light' | 'dark';
 }
 
+export type OccurrenceStatus =
+  | 'UPCOMING'
+  | 'IN_PROGRESS'
+  | 'ATTENDANCE_PENDING'
+  | 'PRESENT'
+  | 'ABSENT'
+  | 'NOT_DELIVERED';
+
+export type ResolvedOutcome = 'PRESENT' | 'ABSENT' | 'NOT_DELIVERED';
+
+export interface ClassOccurrence {
+  id: string; // e.g. "CSE205-2026-09-24-10:10"
+  subjectCode: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  type: ClassType;
+  room?: string;
+  group?: string;
+  status: OccurrenceStatus;
+  resolvedAt?: string;
+}
+
+

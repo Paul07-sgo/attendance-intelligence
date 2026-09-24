@@ -1,4 +1,4 @@
-import type { Subject, TimetableEntry, AcademicEvent, AppSettings } from '../types';
+import type { Subject, TimetableEntry, AcademicEvent, AppSettings, ClassOccurrence } from '../types';
 import {
   INITIAL_SUBJECTS,
   INITIAL_TIMETABLE,
@@ -11,6 +11,7 @@ const KEYS = {
   TIMETABLE: 'attendance_system_timetable_v1',
   EVENTS: 'attendance_system_events_v1',
   SETTINGS: 'attendance_system_settings_v1',
+  OCCURRENCES: 'attendance_system_occurrences_v1',
 };
 
 export function loadSubjects(): Subject[] {
@@ -95,6 +96,26 @@ export function saveSettings(settings: AppSettings): void {
   }
 }
 
+export function loadOccurrences(): Record<string, ClassOccurrence> {
+  try {
+    const raw = localStorage.getItem(KEYS.OCCURRENCES);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (e) {
+    console.error('Failed to load occurrences from localStorage', e);
+  }
+  return {};
+}
+
+export function saveOccurrences(occurrences: Record<string, ClassOccurrence>): void {
+  try {
+    localStorage.setItem(KEYS.OCCURRENCES, JSON.stringify(occurrences));
+  } catch (e) {
+    console.error('Failed to save occurrences to localStorage', e);
+  }
+}
+
 export interface ExportDataPayload {
   version: string;
   exportDate: string;
@@ -102,6 +123,7 @@ export interface ExportDataPayload {
   timetable: TimetableEntry[];
   academicEvents: AcademicEvent[];
   settings: AppSettings;
+  occurrences?: Record<string, ClassOccurrence>;
 }
 
 export function exportAllData(): string {
@@ -112,6 +134,7 @@ export function exportAllData(): string {
     timetable: loadTimetable(),
     academicEvents: loadAcademicEvents(),
     settings: loadSettings(),
+    occurrences: loadOccurrences(),
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -130,6 +153,9 @@ export function importAllData(jsonString: string): boolean {
     if (data.settings && typeof data.settings === 'object') {
       saveSettings({ ...INITIAL_SETTINGS, ...data.settings });
     }
+    if (data.occurrences && typeof data.occurrences === 'object') {
+      saveOccurrences(data.occurrences);
+    }
     return true;
   } catch (e) {
     console.error('Failed to import data', e);
@@ -142,4 +168,6 @@ export function resetToInitialData(): void {
   saveTimetable(INITIAL_TIMETABLE);
   saveAcademicEvents(INITIAL_ACADEMIC_EVENTS);
   saveSettings(INITIAL_SETTINGS);
+  saveOccurrences({});
 }
+

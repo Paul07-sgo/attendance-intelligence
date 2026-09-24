@@ -11,6 +11,9 @@ interface DashboardSummaryProps {
   timetable: TimetableEntry[];
   events: AcademicEvent[];
   onOpenSkipSimulator?: () => void;
+  currentDateStr?: string;
+  pendingOccurrencesCount?: number;
+  onOpenPendingConfirmation?: () => void;
 }
 
 export const DashboardSummary: React.FC<DashboardSummaryProps> = ({
@@ -20,14 +23,17 @@ export const DashboardSummary: React.FC<DashboardSummaryProps> = ({
   timetable,
   events,
   onOpenSkipSimulator,
+  currentDateStr,
+  pendingOccurrencesCount = 0,
+  onOpenPendingConfirmation,
 }) => {
   const subjectsList = stats.map((s) => s.subject);
   const agg = calculateAggregateStats(subjectsList, overallTarget);
 
-  // Today's Intelligence
-  const todayClasses = getClassesForDate(baselineDate, timetable, events);
-  const dayName = getDayOfWeek(baselineDate);
-  const formattedTodayDate = parseISODate(baselineDate).toLocaleDateString('en-US', {
+  const displayDateStr = currentDateStr || baselineDate;
+  const todayClasses = getClassesForDate(displayDateStr, timetable, events);
+  const dayName = getDayOfWeek(displayDateStr);
+  const formattedTodayDate = parseISODate(displayDateStr).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -38,6 +44,33 @@ export const DashboardSummary: React.FC<DashboardSummaryProps> = ({
 
   return (
     <div className="grid grid-cols-12 gap-6">
+      {/* 0. PENDING ATTENDANCE CONFIRMATION BANNER (If any) */}
+      {pendingOccurrencesCount > 0 && onOpenPendingConfirmation && (
+        <div className="col-span-12 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+              {pendingOccurrencesCount}
+            </div>
+            <div>
+              <h4 className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                Pending Attendance Confirmation{pendingOccurrencesCount > 1 ? 's' : ''}
+              </h4>
+              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                {pendingOccurrencesCount === 1
+                  ? 'A class has ended and requires outcome confirmation.'
+                  : `${pendingOccurrencesCount} completed classes require outcome confirmation.`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onOpenPendingConfirmation}
+            className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap cursor-pointer"
+          >
+            Confirm Attendance
+          </button>
+        </div>
+      )}
+
       {/* 1. OVERALL ATTENDANCE HERO (Spans 7 cols on desktop) */}
       <div className="col-span-12 lg:col-span-7 bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-7 lg:p-8 shadow-md border border-indigo-800/60 flex flex-col justify-between">
         <div className="flex items-center justify-between">
